@@ -1,9 +1,255 @@
-const EditPage = (() => {
-    return (
-        <div>
-            <h1>Edit page</h1>
-        </div>
+import React, { useState, useRef, useEffect } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
+import { useParams, useNavigate } from 'react-router-dom';
+import type { RootState } from '../store/store';
+import { updateUser } from '../store/userslice';
+//hello
+const EditPage = () => {
+    const { id } = useParams<{ id: string }>();
+    const users = useSelector((state: RootState) => state.user.users);
+    const dispatch = useDispatch();
+    const navigate = useNavigate();
 
-    )
-})
+    const [name, setName] = useState('');
+    const [email, setEmail] = useState('');
+    const [signature, setSignature] = useState('');
+    const [error, setError] = useState('');
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const [isDrawing, setIsDrawing] = useState(false);
+
+    const user = users.find(u => u.id === id);
+
+    useEffect(() => {
+        if (user) {
+            setName(user.name);
+            setEmail(user.email);
+            setSignature(user.signature || '');
+            
+            // Load existing signature to canvas
+            if (user.signature && canvasRef.current) {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = canvasRef.current;
+                    if (!canvas) return;
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) return;
+                    ctx.drawImage(img, 0, 0);
+                };
+                img.src = user.signature;
+            }
+        }
+    }, [user]);
+
+    if (!user) {
+        return (
+            <div style={{ padding: '2rem', textAlign: 'center' }}>
+                <h2>User not found</h2>
+                <button
+                    onClick={() => navigate('/home')}
+                    style={{
+                        padding: '0.75rem 1.5rem',
+                        backgroundColor: '#1976d2',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '1rem'
+                    }}
+                >
+                    Back to Home
+                </button>
+            </div>
+        );
+    }
+
+    const startDrawing = (e: React.MouseEvent) => {
+        setIsDrawing(true);
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        const rect = canvas.getBoundingClientRect();
+        ctx.beginPath();
+        ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+    };
+
+    const draw = (e: React.MouseEvent) => {
+        if (!isDrawing) return;
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        const rect = canvas.getBoundingClientRect();
+        ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+        ctx.stroke();
+    };
+
+    const stopDrawing = () => {
+        setIsDrawing(false);
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const signatureData = canvas.toDataURL();
+        setSignature(signatureData);
+    };
+
+    const clearSignature = () => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        setSignature('');
+    };
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        
+        if (!name || !email) {
+            setError('Please fill in all fields');
+            return;
+        }
+
+        if (!email.includes('@')) {
+            setError('Please enter a valid email');
+            return;
+        }
+
+        const updatedUser = {
+            ...user,
+            name,
+            email,
+            signature
+        };
+
+        dispatch(updateUser(updatedUser));
+        navigate('/home');
+    };
+
+    return (
+        <div style={{ padding: '2rem', maxWidth: '600px', margin: '0 auto' }}>
+            <h1 style={{ marginBottom: '2rem' }}>Edit User</h1>
+            
+            {error && (
+                <div style={{
+                    backgroundColor: '#ffebee',
+                    color: '#c62828',
+                    padding: '0.75rem',
+                    borderRadius: '4px',
+                    marginBottom: '1rem'
+                }}>
+                    {error}
+                </div>
+            )}
+
+            <form onSubmit={handleSubmit}>
+                <div style={{ marginBottom: '1rem' }}>
+                    <label style={{ display: 'block', marginBottom: '0.5rem' }}>
+                        Name:
+                    </label>
+                    <input
+                        type="text"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        style={{
+                            width: '100%',
+                            padding: '0.75rem',
+                            border: '1px solid #ddd',
+                            borderRadius: '4px',
+                            fontSize: '1rem'
+                        }}
+                    />
+                </div>
+
+                <div style={{ marginBottom: '1rem' }}>
+                    <label style={{ display: 'block', marginBottom: '0.5rem' }}>
+                        Email:
+                    </label>
+                    <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        style={{
+                            width: '100%',
+                            padding: '0.75rem',
+                            border: '1px solid #ddd',
+                            borderRadius: '4px',
+                            fontSize: '1rem'
+                        }}
+                    />
+                </div>
+
+                <div style={{ marginBottom: '1.5rem' }}>
+                    <label style={{ display: 'block', marginBottom: '0.5rem' }}>
+                        Signature:
+                    </label>
+                    <canvas
+                        ref={canvasRef}
+                        width={400}
+                        height={150}
+                        style={{
+                            width: '100%',
+                            height: '150px',
+                            border: '1px solid #ddd',
+                            borderRadius: '4px',
+                            cursor: 'crosshair'
+                        }}
+                        onMouseDown={startDrawing}
+                        onMouseMove={draw}
+                        onMouseUp={stopDrawing}
+                        onMouseLeave={stopDrawing}
+                    />
+                    <button
+                        type="button"
+                        onClick={clearSignature}
+                        style={{
+                            marginTop: '0.5rem',
+                            padding: '0.5rem 1rem',
+                            backgroundColor: '#6c757d',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer'
+                        }}
+                    >
+                        Clear Signature
+                    </button>
+                </div>
+
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                    <button
+                        type="submit"
+                        style={{
+                            padding: '0.75rem 1.5rem',
+                            backgroundColor: '#ff9800',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '1rem'
+                        }}
+                    >
+                        Update User
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => navigate('/home')}
+                        style={{
+                            padding: '0.75rem 1.5rem',
+                            backgroundColor: '#6c757d',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '1rem'
+                        }}
+                    >
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    );
+};
+
 export default EditPage;
+
